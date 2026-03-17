@@ -115,7 +115,7 @@ class NovelReaderPanel(
         // 阅读视图
         val readerPanel = JPanel(BorderLayout())
         contentArea = JTextArea().apply {
-            text = "请在设置中选择书籍文件开始阅读...\n\nSettings → Tools → Novel Reader"
+            text = "请在设置中选择书籍文件开始阅读...\n\nSettings → Tools → BookPeek"
             isEditable = false
             lineWrap = true
             wrapStyleWord = true
@@ -420,7 +420,7 @@ class NovelReaderPanel(
         
         if (chapters.isEmpty()) {
             titleLabel.text = "未加载书籍"
-            contentArea.text = "请在设置中选择书籍文件开始阅读...\n\nSettings → Tools → Novel Reader"
+            contentArea.text = "请在设置中选择书籍文件开始阅读...\n\nSettings → Tools → BookPeek"
             pageLabel.text = "0 / 0"
             prevButton.isEnabled = false
             nextButton.isEnabled = false

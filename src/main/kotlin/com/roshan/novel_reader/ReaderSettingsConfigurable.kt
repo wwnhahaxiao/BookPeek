@@ -24,7 +24,7 @@ class ReaderSettingsConfigurable : Configurable {
     private var showControlsCheckBox: JCheckBox? = null
     private var chapterPatternField: JBTextField? = null
 
-    override fun getDisplayName(): String = "Novel Reader"
+    override fun getDisplayName(): String = "BookPeek"
 
     override fun createComponent(): JComponent {
         val settings = ReaderSettings.getInstance().state
@@ -75,7 +75,7 @@ class ReaderSettingsConfigurable : Configurable {
             .addTooltip("用于识别章节标题的正则表达式")
             .addSeparator()
             .addComponent(JBLabel("快捷键: Alt+A (上一章), Alt+D (下一章), Alt+C (切换按钮显示)"))
-            .addTooltip("如需修改快捷键，请到 Settings → Keymap 搜索 NovelReader")
+            .addTooltip("如需修改快捷键，请到 Settings → Keymap 搜索 BookPeek")
             .addComponentFillVertically(JPanel(), 0)
             .panel
 

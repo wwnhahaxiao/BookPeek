@@ -1,4 +1,4 @@
-# Novel Reader
+# BookPeek
 
 An IntelliJ Platform plugin for reading novels and text files inside your IDE.
 
@@ -13,8 +13,8 @@ An IntelliJ Platform plugin for reading novels and text files inside your IDE.
 
 ## Getting Started
 
-1. Go to **Settings → Tools → Novel Reader** and select a TXT file
-2. Click the **Novel Reader** icon in the bottom tool bar to open the reader
+1. Go to **Settings → Tools → BookPeek** and select a TXT file
+2. Click the **BookPeek** icon in the bottom tool bar to open the reader
 3. Use **Alt+A** / **Alt+D** to navigate chapters, **Alt+C** to toggle controls
 
 ## Project Structure

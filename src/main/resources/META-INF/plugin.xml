@@ -1,19 +1,18 @@
 <!-- Plugin Configuration File: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <!-- Unique identifier of the plugin. It should be FQN, cannot be changed between the plugin versions. -->
-    <id>com.roshan.Novel_Reader</id>
+    <id>com.roshan.BookPeek</id>
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
-    <name>Novel Reader</name>
+    <name>BookPeek</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
     <vendor url="https://www.roshan.com">com.roshan</vendor>
 
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
-    <description><![CDATA[
-        Read novels and text files inside your IDE.
+    <description><![CDATA[Read novels and text files inside your IDE.
         <br><br>
         <b>Features:</b>
         <ul>
@@ -27,8 +26,8 @@
 
         <b>Getting Started:</b>
         <ol>
-            <li>Go to <b>Settings → Tools → Novel Reader</b> and select a TXT file</li>
-            <li>Click the <b>Novel Reader</b> icon in the bottom tool bar to open the reader</li>
+            <li>Go to <b>Settings → Tools → BookPeek</b> and select a TXT file</li>
+            <li>Click the <b>BookPeek</b> icon in the bottom tool bar to open the reader</li>
             <li>Use <b>Alt+A</b> / <b>Alt+D</b> to navigate chapters</li>
         </ol>
 
@@ -49,8 +48,8 @@
 
         <b>快速开始：</b>
         <ol>
-            <li>打开 <b>Settings → Tools → Novel Reader</b>，选择一个 TXT 文件</li>
-            <li>点击底部工具栏的 <b>Novel Reader</b> 图标打开阅读器</li>
+            <li>打开 <b>Settings → Tools → BookPeek</b>，选择一个 TXT 文件</li>
+            <li>点击底部工具栏的 <b>BookPeek</b> 图标打开阅读器</li>
             <li>使用 <b>Alt+A</b> / <b>Alt+D</b> 切换章节</li>
         </ol>
     ]]></description>
@@ -67,7 +66,7 @@
             工具窗口配置（类似 Debug 窗口）：
             anchor="bottom" - 图标在底部边栏，窗口在底部打开
         -->
-        <toolWindow id="NovelReader"
+        <toolWindow id="BookPeek"
                     factoryClass="com.roshan.novel_reader.NovelReaderToolWindowFactory"
                     anchor="bottom"
                     icon="/icons/reader.svg"/>
@@ -77,7 +76,7 @@
                 parentId="tools"
                 instance="com.roshan.novel_reader.ReaderSettingsConfigurable"
                 id="com.roshan.novel_reader.ReaderSettingsConfigurable"
-                displayName="Novel Reader"/>
+                displayName="BookPeek"/>
 
         <!-- 配置状态持久化服务 -->
         <applicationService
@@ -86,19 +85,19 @@
 
     <!-- 快捷键 Actions -->
     <actions>
-        <action id="NovelReader.PrevChapter"
+        <action id="BookPeek.PrevChapter"
                 class="com.roshan.novel_reader.PrevChapterAction"
                 text="上一章"
                 description="阅读器切换到上一章">
             <keyboard-shortcut keymap="$default" first-keystroke="alt A"/>
         </action>
-        <action id="NovelReader.NextChapter"
+        <action id="BookPeek.NextChapter"
                 class="com.roshan.novel_reader.NextChapterAction"
                 text="下一章"
                 description="阅读器切换到下一章">
             <keyboard-shortcut keymap="$default" first-keystroke="alt D"/>
         </action>
-        <action id="NovelReader.ToggleControls"
+        <action id="BookPeek.ToggleControls"
                 class="com.roshan.novel_reader.ToggleControlsAction"
                 text="切换控制按钮"
                 description="显示/隐藏章节目录和翻页按钮">

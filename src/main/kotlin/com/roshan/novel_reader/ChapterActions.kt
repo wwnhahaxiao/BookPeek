@@ -11,7 +11,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 class PrevChapterAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("NovelReader") ?: return
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("BookPeek") ?: return
         
         // 获取阅读器面板并切换章节
         val content = toolWindow.contentManager.getContent(0) ?: return
@@ -30,7 +30,7 @@ class PrevChapterAction : AnAction() {
 class NextChapterAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("NovelReader") ?: return
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("BookPeek") ?: return
         
         // 获取阅读器面板并切换章节
         val content = toolWindow.contentManager.getContent(0) ?: return
