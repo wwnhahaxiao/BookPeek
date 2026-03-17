@@ -1,0 +1,108 @@
+<!-- Plugin Configuration File: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN, cannot be changed between the plugin versions. -->
+    <id>com.roshan.Novel_Reader</id>
+
+    <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
+    <name>Novel Reader</name>
+
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor url="https://www.roshan.com">com.roshan</vendor>
+
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
+    <description><![CDATA[
+        Read novels and text files inside your IDE.
+        <br><br>
+        <b>Features:</b>
+        <ul>
+            <li>Open and read TXT files directly in a tool window</li>
+            <li>Automatic chapter detection with configurable regex patterns</li>
+            <li>Chapter navigation and table of contents</li>
+            <li>Reading progress persistence across IDE restarts</li>
+            <li>Adjustable font size</li>
+            <li>Keyboard shortcuts for chapter switching</li>
+        </ul>
+
+        <b>Getting Started:</b>
+        <ol>
+            <li>Go to <b>Settings → Tools → Novel Reader</b> and select a TXT file</li>
+            <li>Click the <b>Novel Reader</b> icon in the bottom tool bar to open the reader</li>
+            <li>Use <b>Alt+A</b> / <b>Alt+D</b> to navigate chapters</li>
+        </ol>
+
+        <br>
+        <b>中文说明：</b>
+        <br>
+        在 IDE 中阅读小说和文本文件。
+        <br><br>
+        <b>功能特性：</b>
+        <ul>
+            <li>在工具窗口中直接打开并阅读 TXT 文件</li>
+            <li>可配置正则表达式的自动章节识别</li>
+            <li>章节导航与目录</li>
+            <li>阅读进度跨重启保持</li>
+            <li>可调节字号</li>
+            <li>章节切换快捷键</li>
+        </ul>
+
+        <b>快速开始：</b>
+        <ol>
+            <li>打开 <b>Settings → Tools → Novel Reader</b>，选择一个 TXT 文件</li>
+            <li>点击底部工具栏的 <b>Novel Reader</b> 图标打开阅读器</li>
+            <li>使用 <b>Alt+A</b> / <b>Alt+D</b> 切换章节</li>
+        </ol>
+    ]]></description>
+
+    <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <!-- 只依赖平台核心模块，兼容所有 JetBrains IDE -->
+    <depends>com.intellij.modules.platform</depends>
+
+    <!-- Extensions defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- 
+            工具窗口配置（类似 Debug 窗口）：
+            anchor="bottom" - 图标在底部边栏，窗口在底部打开
+        -->
+        <toolWindow id="NovelReader"
+                    factoryClass="com.roshan.novel_reader.NovelReaderToolWindowFactory"
+                    anchor="bottom"
+                    icon="/icons/reader.svg"/>
+
+        <!-- 配置界面 -->
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.roshan.novel_reader.ReaderSettingsConfigurable"
+                id="com.roshan.novel_reader.ReaderSettingsConfigurable"
+                displayName="Novel Reader"/>
+
+        <!-- 配置状态持久化服务 -->
+        <applicationService
+                serviceImplementation="com.roshan.novel_reader.ReaderSettings"/>
+    </extensions>
+
+    <!-- 快捷键 Actions -->
+    <actions>
+        <action id="NovelReader.PrevChapter"
+                class="com.roshan.novel_reader.PrevChapterAction"
+                text="上一章"
+                description="阅读器切换到上一章">
+            <keyboard-shortcut keymap="$default" first-keystroke="alt A"/>
+        </action>
+        <action id="NovelReader.NextChapter"
+                class="com.roshan.novel_reader.NextChapterAction"
+                text="下一章"
+                description="阅读器切换到下一章">
+            <keyboard-shortcut keymap="$default" first-keystroke="alt D"/>
+        </action>
+        <action id="NovelReader.ToggleControls"
+                class="com.roshan.novel_reader.ToggleControlsAction"
+                text="切换控制按钮"
+                description="显示/隐藏章节目录和翻页按钮">
+            <keyboard-shortcut keymap="$default" first-keystroke="alt C"/>
+        </action>
+    </actions>
+</idea-plugin>
