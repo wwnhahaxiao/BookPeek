@@ -15,7 +15,7 @@ class PrevChapterAction : AnAction() {
         
         // 获取阅读器面板并切换章节
         val content = toolWindow.contentManager.getContent(0) ?: return
-        val panel = content.component as? NovelReaderPanel ?: return
+        val panel = content.component as? BookPeekPanel ?: return
         panel.goToPreviousChapter()
     }
 
@@ -34,7 +34,7 @@ class NextChapterAction : AnAction() {
         
         // 获取阅读器面板并切换章节
         val content = toolWindow.contentManager.getContent(0) ?: return
-        val panel = content.component as? NovelReaderPanel ?: return
+        val panel = content.component as? BookPeekPanel ?: return
         panel.goToNextChapter()
     }
 

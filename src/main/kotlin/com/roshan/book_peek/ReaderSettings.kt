@@ -10,8 +10,8 @@ import com.intellij.openapi.components.Storage
  * 阅读器配置状态
  */
 @State(
-    name = "NovelReaderSettings",
-    storages = [Storage("NovelReaderSettings.xml")]
+    name = "BookPeekSettings",
+    storages = [Storage("BookPeekSettings.xml")]
 )
 @Service(Service.Level.APP)
 class ReaderSettings : PersistentStateComponent<ReaderSettings.State> {
@@ -27,6 +27,8 @@ class ReaderSettings : PersistentStateComponent<ReaderSettings.State> {
         var chapterPattern: String = "^第[零一二三四五六七八九十百千万\\d]+[章节回集卷].*",
         /** 字号大小 */
         var fontSize: Int = 14,
+        /** 行间距倍数 */
+        var lineSpacing: Float = 1.5f,
         /** 是否显示控制按钮（章节目录、上一章、下一章） */
         var showControls: Boolean = true,
         /** 上次阅读的书籍文件路径 */

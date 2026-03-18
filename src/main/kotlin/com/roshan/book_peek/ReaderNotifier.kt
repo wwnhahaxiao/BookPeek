@@ -7,7 +7,7 @@ import com.intellij.util.messages.Topic
  */
 interface ReaderNotifier {
     companion object {
-        val TOPIC = Topic.create("NovelReaderSettingsChanged", ReaderNotifier::class.java)
+        val TOPIC = Topic.create("BookPeekSettingsChanged", ReaderNotifier::class.java)
     }
 
     /**

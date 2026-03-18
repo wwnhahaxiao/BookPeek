@@ -67,8 +67,9 @@
             anchor="bottom" - 图标在底部边栏，窗口在底部打开
         -->
         <toolWindow id="BookPeek"
-                    factoryClass="com.roshan.book_peek.NovelReaderToolWindowFactory"
-                    anchor="bottom"
+                    factoryClass="com.roshan.book_peek.BookPeekToolWindowFactory"
+                    anchor="left"
+                    secondary="true"
                     icon="/icons/reader.svg"/>
 
         <!-- 配置界面 -->

@@ -21,6 +21,7 @@ class ReaderSettingsConfigurable : Configurable {
     private var settingsPanel: JPanel? = null
     private var bookFileField: TextFieldWithBrowseButton? = null
     private var fontSizeSpinner: JSpinner? = null
+    private var lineSpacingSpinner: JSpinner? = null
     private var showControlsCheckBox: JCheckBox? = null
     private var chapterPatternField: JBTextField? = null
 
@@ -55,6 +56,11 @@ class ReaderSettingsConfigurable : Configurable {
 
         // 字号配置
         fontSizeSpinner = JSpinner(SpinnerNumberModel(settings.fontSize, 8, 48, 1))
+
+        // 行间距配置
+        lineSpacingSpinner = JSpinner(SpinnerNumberModel(settings.lineSpacing.toDouble(), 1.0, 3.0, 0.1)).apply {
+            editor = JSpinner.NumberEditor(this, "0.0")
+        }
         
         // 显示控制按钮开关
         showControlsCheckBox = JCheckBox("显示控制按钮", settings.showControls)
@@ -67,6 +73,9 @@ class ReaderSettingsConfigurable : Configurable {
             .addSeparator()
             .addLabeledComponent(JBLabel("字号大小:"), fontSizeSpinner!!, 1, false)
             .addTooltip("阅读器内容显示的字号 (8-48)")
+            .addSeparator()
+            .addLabeledComponent(JBLabel("行间距:"), lineSpacingSpinner!!, 1, false)
+            .addTooltip("行间距倍数 (1.0-3.0)，1.0 为单倍行距")
             .addSeparator()
             .addComponent(showControlsCheckBox!!)
             .addTooltip("显示章节目录、上一章、下一章按钮 (快捷键 Alt+C 切换)")
@@ -88,6 +97,7 @@ class ReaderSettingsConfigurable : Configurable {
         val settings = ReaderSettings.getInstance().state
         return bookFileField?.text != settings.lastBookPath ||
                 (fontSizeSpinner?.value as? Int) != settings.fontSize ||
+                (lineSpacingSpinner?.value as? Double)?.toFloat() != settings.lineSpacing ||
                 showControlsCheckBox?.isSelected != settings.showControls ||
                 chapterPatternField?.text != settings.chapterPattern
     }
@@ -106,6 +116,7 @@ class ReaderSettingsConfigurable : Configurable {
                 nextChapterShortcut = currentState.nextChapterShortcut,
                 chapterPattern = chapterPatternField?.text ?: "^第[零一二三四五六七八九十百千万\\d]+[章节回集卷].*",
                 fontSize = (fontSizeSpinner?.value as? Int) ?: 14,
+                lineSpacing = (lineSpacingSpinner?.value as? Double)?.toFloat() ?: 1.5f,
                 showControls = showControlsCheckBox?.isSelected ?: true,
                 lastBookPath = newBookPath,
                 lastChapterIndex = newChapterIndex
@@ -122,6 +133,7 @@ class ReaderSettingsConfigurable : Configurable {
         val settings = ReaderSettings.getInstance().state
         bookFileField?.text = settings.lastBookPath
         fontSizeSpinner?.value = settings.fontSize
+        lineSpacingSpinner?.value = settings.lineSpacing.toDouble()
         showControlsCheckBox?.isSelected = settings.showControls
         chapterPatternField?.text = settings.chapterPattern
     }
@@ -130,6 +142,7 @@ class ReaderSettingsConfigurable : Configurable {
         settingsPanel = null
         bookFileField = null
         fontSizeSpinner = null
+        lineSpacingSpinner = null
         showControlsCheckBox = null
         chapterPatternField = null
     }

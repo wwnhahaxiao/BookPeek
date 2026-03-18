@@ -17,18 +17,20 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
 import javax.swing.*
+import javax.swing.text.SimpleAttributeSet
+import javax.swing.text.StyleConstants
 
 /**
  * 小说阅读器工具窗口工厂
  */
-class NovelReaderToolWindowFactory : ToolWindowFactory {
+class BookPeekToolWindowFactory : ToolWindowFactory {
     override fun shouldBeAvailable(project: Project) = true
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         // 设置窗口失焦时自动隐藏
         toolWindow.setAutoHide(true)
         
-        val readerPanel = NovelReaderPanel(project, toolWindow)
+        val readerPanel = BookPeekPanel(project, toolWindow)
         val content = ContentFactory.getInstance().createContent(readerPanel, "阅读器", false)
         toolWindow.contentManager.addContent(content)
     }
@@ -42,7 +44,7 @@ data class Chapter(val title: String, val content: String)
 /**
  * 阅读器主面板 (Swing UI)
  */
-class NovelReaderPanel(
+class BookPeekPanel(
     private val project: Project?,
     private val toolWindow: ToolWindow? = null
 ) : JPanel(BorderLayout()), Disposable {
@@ -52,7 +54,7 @@ class NovelReaderPanel(
     private var lastLoadedBookPath: String = ""
     
     private val titleLabel: JBLabel
-    private val contentArea: JTextArea
+    private val contentArea: JTextPane
     private val pageLabel: JBLabel
     private val prevButton: JButton
     private val nextButton: JButton
@@ -114,14 +116,15 @@ class NovelReaderPanel(
         
         // 阅读视图
         val readerPanel = JPanel(BorderLayout())
-        contentArea = JTextArea().apply {
+        contentArea = object : JTextPane() {
+            override fun getScrollableTracksViewportWidth() = true
+        }.apply {
             text = "请在设置中选择书籍文件开始阅读...\n\nSettings → Tools → BookPeek"
             isEditable = false
-            lineWrap = true
-            wrapStyleWord = true
             font = Font("Microsoft YaHei", Font.PLAIN, settings.fontSize)
             border = BorderFactory.createEmptyBorder(10, 15, 10, 15)
         }
+        applyLineSpacing()
         val readerScrollPane = JBScrollPane(contentArea).apply {
             border = BorderFactory.createEmptyBorder()
         }
@@ -413,14 +416,22 @@ class NovelReaderPanel(
     /**
      * 更新显示内容
      */
+    private fun applyLineSpacing() {
+        val settings = ReaderSettings.getInstance().state
+        val attrs = SimpleAttributeSet()
+        StyleConstants.setLineSpacing(attrs, settings.lineSpacing - 1.0f)
+        val doc = contentArea.styledDocument
+        doc.setParagraphAttributes(0, doc.length, attrs, false)
+    }
+
     private fun updateContent() {
-        // 更新字号
         val settings = ReaderSettings.getInstance().state
         contentArea.font = Font("Microsoft YaHei", Font.PLAIN, settings.fontSize)
         
         if (chapters.isEmpty()) {
             titleLabel.text = "未加载书籍"
             contentArea.text = "请在设置中选择书籍文件开始阅读...\n\nSettings → Tools → BookPeek"
+            applyLineSpacing()
             pageLabel.text = "0 / 0"
             prevButton.isEnabled = false
             nextButton.isEnabled = false
@@ -429,8 +440,12 @@ class NovelReaderPanel(
         
         val chapter = chapters[currentChapterIndex]
         titleLabel.text = "$currentBookName - ${chapter.title}"
-        contentArea.text = chapter.content
-        contentArea.caretPosition = 0  // 滚动到顶部
+        val indentedContent = chapter.content.lines().joinToString("\n") { line ->
+            if (line.isNotBlank()) "\u3000\u3000${line.trimStart()}" else line
+        }
+        contentArea.text = indentedContent
+        applyLineSpacing()
+        contentArea.caretPosition = 0
         pageLabel.text = "${currentChapterIndex + 1} / ${chapters.size}"
         prevButton.isEnabled = currentChapterIndex > 0
         nextButton.isEnabled = currentChapterIndex < chapters.size - 1
