@@ -256,6 +256,7 @@ class BookPeekPanel(
     private fun restoreLastReadingProgress() {
         val settings = ReaderSettings.getInstance().state
         val lastBookPath = settings.lastBookPath
+        val lastIndex = settings.lastChapterIndex
         
         if (lastBookPath.isNotBlank()) {
             val file = File(lastBookPath)
@@ -266,11 +267,12 @@ class BookPeekPanel(
                     lastLoadedBookPath = file.absolutePath
                     
                     // 恢复章节位置
-                    val lastIndex = settings.lastChapterIndex
                     if (lastIndex in chapters.indices) {
                         currentChapterIndex = lastIndex
-                        updateContent()
                     }
+                    updateContent()
+                    // 解析时索引被重置为 0，这里把恢复后的进度写回
+                    saveReadingProgress()
                 } catch (e: Exception) {
                     // 恢复失败，清空内容
                     chapters.clear()
@@ -391,9 +393,8 @@ class BookPeekPanel(
         if (chapters.isEmpty()) {
             chapters.add(Chapter(bookName, content))
         }
-        
+
         updateContent()
-        saveReadingProgress()
     }
 
 
