@@ -5,12 +5,10 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import java.awt.BorderLayout
-import java.io.File
 import javax.swing.*
 
 /**
@@ -38,20 +36,7 @@ class ReaderSettingsConfigurable : Configurable {
         
         bookFileField = TextFieldWithBrowseButton().apply {
             text = settings.lastBookPath
-            addBrowseFolderListener(object : TextBrowseFolderListener(fileDescriptor) {
-                override fun getInitialFile(): com.intellij.openapi.vfs.VirtualFile? {
-                    // 默认打开上次书籍所在的目录
-                    val lastPath = settings.lastBookPath
-                    if (lastPath.isNotBlank()) {
-                        val file = File(lastPath)
-                        val parentDir = if (file.exists()) file.parentFile else file.parentFile
-                        if (parentDir?.exists() == true) {
-                            return LocalFileSystem.getInstance().findFileByIoFile(parentDir)
-                        }
-                    }
-                    return super.getInitialFile()
-                }
-            })
+            addBrowseFolderListener(TextBrowseFolderListener(fileDescriptor))
         }
 
         // 字号配置
