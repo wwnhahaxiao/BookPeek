@@ -13,10 +13,15 @@ import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.Point
+import java.awt.geom.Point2D
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
 import javax.swing.*
+import javax.swing.plaf.basic.BasicTextPaneUI
+import javax.swing.text.JTextComponent
+import javax.swing.text.Position
 import javax.swing.text.SimpleAttributeSet
 import javax.swing.text.StyleConstants
 
@@ -32,6 +37,7 @@ class BookPeekToolWindowFactory : ToolWindowFactory {
         
         val readerPanel = BookPeekPanel(project, toolWindow)
         val content = ContentFactory.getInstance().createContent(readerPanel, "阅读器", false)
+        readerPanel.onTitleChanged = { title -> content.displayName = title }
         toolWindow.contentManager.addContent(content)
     }
 }
@@ -51,10 +57,17 @@ class BookPeekPanel(
     private var currentChapterIndex = 0
     private var chapters: MutableList<Chapter> = mutableListOf()
     private var currentBookPath: String = ""
+    /** 书籍的稳定标识，用于比对进度存储中的记录 */
+    private var currentBookId: String = ""
     private var lastLoadedBookPath: String = ""
+    /** 阅读内容所在的滚动面板，在 init 中配置并注册滚动监听 */
+    private val contentScrollPane: JBScrollPane
     
     private val titleLabel: JBLabel
     private val contentArea: JTextPane
+
+    /** 恢复进度期间忽略滚动事件，避免把恢复结果反向覆盖成旧值 */
+    private var restoringScroll = false
     private val pageLabel: JBLabel
     private val prevButton: JButton
     private val nextButton: JButton
@@ -72,6 +85,15 @@ class BookPeekPanel(
     private val chapterListPanel: JPanel
     private val chapterJList: JBList<String>
     private val chapterListModel = DefaultListModel<String>()
+
+    /**
+     * 章节标题变化时同步到工具窗口 tab：有标题就显示章节标题，没有就显示"阅读器"
+     */
+    var onTitleChanged: ((String) -> Unit)? = null
+        set(value) {
+            field = value
+            updateTabTitle()
+        }
     
     companion object {
         private const val CARD_READER = "reader"
@@ -117,6 +139,16 @@ class BookPeekPanel(
         // 阅读视图
         val readerPanel = JPanel(BorderLayout())
         contentArea = object : JTextPane() {
+            init {
+                // DefaultCaret 拖拽时直接调 UI 的 viewToModel，覆盖组件自身的方法拦不到，
+                // 所以换成带行尾修正的 UI
+                val fg = foreground
+                val bg = background
+                setUI(BookPeekTextPaneUI())
+                foreground = fg
+                background = bg
+            }
+
             override fun getScrollableTracksViewportWidth() = true
         }.apply {
             text = "请在设置中选择书籍文件开始阅读...\n\nSettings → Tools → BookPeek"
@@ -129,10 +161,10 @@ class BookPeekPanel(
             border = BorderFactory.createEmptyBorder(10, 15, 10, 15)
         }
         applyLineSpacing()
-        val readerScrollPane = JBScrollPane(contentArea).apply {
+        contentScrollPane = JBScrollPane(contentArea).apply {
             border = BorderFactory.createEmptyBorder()
         }
-        readerPanel.add(readerScrollPane, BorderLayout.CENTER)
+        readerPanel.add(contentScrollPane, BorderLayout.CENTER)
         
         // 章节目录视图
         chapterListPanel = JPanel(BorderLayout())
@@ -190,6 +222,11 @@ class BookPeekPanel(
         bottomPanel.add(nextButton)
 
         add(bottomPanel, BorderLayout.SOUTH)
+
+        // 滚动时实时记录章节内位置（恢复进度期间由 restoringScroll 过滤）
+        contentScrollPane.verticalScrollBar.addAdjustmentListener {
+            saveReadingProgress(storeScroll = true)
+        }
         
         // 恢复上次阅读进度
         restoreLastReadingProgress()
@@ -256,8 +293,15 @@ class BookPeekPanel(
     private fun restoreLastReadingProgress() {
         val settings = ReaderSettings.getInstance().state
         val lastBookPath = settings.lastBookPath
-        val lastIndex = settings.lastChapterIndex
-        
+        val bookId = if (lastBookPath.isBlank()) "" else ReadingProgressStore.pathIdOf(File(lastBookPath))
+        val stored = ReadingProgressStore.getInstance().progressOf(bookId)
+        // 升级前只记过章节索引时，沿用设置里的章节，滚动位置留空
+        val progress = stored ?: settings.lastChapterIndex.takeIf { lastBookPath.isNotBlank() }?.let {
+            ReadingProgressStore.Progress(it, null)
+        }
+        val lastIndex = progress?.chapterIndex ?: 0
+        restoringScroll = true
+
         if (lastBookPath.isNotBlank()) {
             val file = File(lastBookPath)
             if (file.exists() && file.isFile) {
@@ -270,7 +314,11 @@ class BookPeekPanel(
                     if (lastIndex in chapters.indices) {
                         currentChapterIndex = lastIndex
                     }
-                    updateContent()
+                    val savedScroll = progress?.scrollValue
+                    updateContent(
+                        resetScroll = savedScroll == null,
+                        restoreScrollValue = savedScroll ?: 0
+                    )
                     // 解析时索引被重置为 0，这里把恢复后的进度写回
                     saveReadingProgress()
                 } catch (e: Exception) {
@@ -292,6 +340,9 @@ class BookPeekPanel(
             currentBookName = "未加载书籍"
             updateContent()
         }
+
+        // 恢复完成后再打开滚动记录，避免恢复过程中的滚动事件覆盖已存位置
+        restoringScroll = false
     }
 
     /**
@@ -338,9 +389,13 @@ class BookPeekPanel(
     }
 
     /**
-     * 保存阅读进度
+     * 保存阅读进度（storeScroll：由滚动事件触发时传入，恢复期间忽略）
      */
-    private fun saveReadingProgress() {
+    private fun saveReadingProgress(storeScroll: Boolean = false) {
+        if (restoringScroll && storeScroll) return
+        // 未加载书籍时 currentBookPath 为空，不覆盖已有进度
+        if (currentBookPath.isEmpty() || currentBookId.isEmpty()) return
+
         val settings = ReaderSettings.getInstance()
         val state = settings.state
         settings.loadState(
@@ -349,6 +404,15 @@ class BookPeekPanel(
                 lastChapterIndex = currentChapterIndex
             )
         )
+
+        // 恢复阶段尚未写入滚动位置时沿用已有记录，避免把"未知"写成 0
+        val existing = ReadingProgressStore.getInstance().progressOf(currentBookId)
+        val scrollValue = if (restoringScroll) existing?.scrollValue else contentScrollPane.verticalScrollBar.value
+        ReadingProgressStore.getInstance().saveProgress(
+            currentBookId,
+            ReadingProgressStore.Progress(currentChapterIndex, scrollValue)
+        )
+
         ApplicationManager.getApplication().invokeLater {
             ApplicationManager.getApplication().saveSettings()
         }
@@ -365,6 +429,7 @@ class BookPeekPanel(
         currentChapterIndex = 0
         currentBookName = bookName
         currentBookPath = filePath
+        currentBookId = if (filePath.isEmpty()) "" else ReadingProgressStore.pathIdOf(File(filePath))
         
         val lines = content.lines()
         var currentTitle = "序章"
@@ -420,9 +485,6 @@ class BookPeekPanel(
         }
     }
 
-    /**
-     * 更新显示内容
-     */
     private fun applyLineSpacing() {
         val settings = ReaderSettings.getInstance().state
         val attrs = SimpleAttributeSet()
@@ -431,7 +493,18 @@ class BookPeekPanel(
         doc.setParagraphAttributes(0, doc.length, attrs, false)
     }
 
-    private fun updateContent(resetScroll: Boolean = true) {
+    private fun updateTabTitle() {
+        val title = chapters.getOrNull(currentChapterIndex)?.title?.takeIf { it.isNotBlank() } ?: "阅读器"
+        onTitleChanged?.invoke(title)
+    }
+
+    /**
+     * 更新显示内容。
+     *
+     * resetScroll 为 true 时回到章节开头；restoreScrollValue 用于恢复上次阅读的位置，
+     * 会在布局完成后按比例还原（文档未完成排版时滚动条的最大值不可靠）。
+     */
+    private fun updateContent(resetScroll: Boolean = true, restoreScrollValue: Int = 0) {
         val settings = ReaderSettings.getInstance().state
         contentArea.font = Font("Microsoft YaHei", Font.PLAIN, settings.fontSize)
         
@@ -442,11 +515,13 @@ class BookPeekPanel(
             pageLabel.text = "0 / 0"
             prevButton.isEnabled = false
             nextButton.isEnabled = false
+            updateTabTitle()
             return
         }
         
-        val scrollPane = SwingUtilities.getAncestorOfClass(JScrollPane::class.java, contentArea) as? JScrollPane
-        val savedScrollValue = scrollPane?.verticalScrollBar?.value
+        val scrollBar = contentScrollPane.verticalScrollBar
+        val savedScrollValue = scrollBar.value
+        val savedScrollRatio = if (scrollBar.maximum > 0) savedScrollValue.toDouble() / scrollBar.maximum else 0.0
         
         val chapter = chapters[currentChapterIndex]
         titleLabel.text = "$currentBookName - ${chapter.title}"
@@ -457,11 +532,57 @@ class BookPeekPanel(
         applyLineSpacing()
         if (resetScroll) {
             contentArea.caretPosition = 0
-        } else if (savedScrollValue != null) {
-            SwingUtilities.invokeLater { scrollPane.verticalScrollBar.value = savedScrollValue }
+        } else {
+            val restoredRatio = if (restoringScroll && scrollBar.maximum > 0) {
+                restoreScrollValue.toDouble() / scrollBar.maximum
+            } else {
+                savedScrollRatio
+            }
+            SwingUtilities.invokeLater {
+                val maxScroll = maxOf(scrollBar.maximum - scrollBar.visibleAmount, 0)
+                val value = when {
+                    restoringScroll && restoreScrollValue > 0 && restoreScrollValue <= maxScroll -> restoreScrollValue
+                    else -> (restoredRatio * maxScroll).toInt()
+                }
+                scrollBar.value = value.coerceIn(0, maxScroll)
+            }
         }
         pageLabel.text = "${currentChapterIndex + 1} / ${chapters.size}"
         prevButton.isEnabled = currentChapterIndex > 0
         nextButton.isEnabled = currentChapterIndex < chapters.size - 1
+        updateTabTitle()
+    }
+}
+
+/**
+ * 修正自动换行行尾的命中偏移。
+ *
+ * DefaultCaret 处理鼠标拖拽时直接调用 UI 的 viewToModel，绕过了组件自身的方法，
+ * 所以只能在 UI 层拦。指针落在某行最后一个字的右侧空白里时，默认实现会把偏移钳在
+ * "最后一个字的起点"，这个字永远进不了选区；这里把这种"行末外侧"的命中推进到
+ * 该字之后，也就是下一行的行首。
+ */
+private class BookPeekTextPaneUI : BasicTextPaneUI() {
+    override fun viewToModel(tc: JTextComponent, pt: Point, biasReturn: Array<Position.Bias>): Int =
+        fixLineEnd(tc, pt.x.toDouble(), super.viewToModel(tc, pt, biasReturn))
+
+    override fun viewToModel2D(tc: JTextComponent, pt: Point2D, biasReturn: Array<Position.Bias>): Int =
+        fixLineEnd(tc, pt.x, super.viewToModel2D(tc, pt, biasReturn))
+
+    private fun fixLineEnd(tc: JTextComponent, x: Double, off: Int): Int {
+        val doc = tc.document ?: return off
+        if (off <= 0 || off >= doc.length) return off
+        return try {
+            val here = tc.modelToView2D(off) ?: return off
+            val next = tc.modelToView2D(off + 1) ?: return off
+            // 只有软换行的行尾才有这个问题：该字必须是本视觉行的最后一个字
+            if (next.y == here.y && off + 1 < doc.length) return off
+            val ch = doc.getText(off, 1)[0]
+            if (ch == '\n' || ch == '\r') return off
+            val charRight = here.x + tc.getFontMetrics(tc.font).charWidth(ch)
+            if (x > charRight) off + 1 else off
+        } catch (e: Exception) {
+            off
+        }
     }
 }

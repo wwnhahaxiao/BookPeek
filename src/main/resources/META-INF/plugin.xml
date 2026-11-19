@@ -82,6 +82,10 @@
         <!-- 配置状态持久化服务 -->
         <applicationService
                 serviceImplementation="com.roshan.book_peek.ReaderSettings"/>
+
+        <!-- 阅读进度存储（按 IDE 实例隔离） -->
+        <applicationService
+                serviceImplementation="com.roshan.book_peek.ReadingProgressStore"/>
     </extensions>
 
     <!-- 快捷键 Actions -->
