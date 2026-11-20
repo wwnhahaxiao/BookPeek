@@ -223,7 +223,8 @@ class BookPeekPanel(
 
         add(bottomPanel, BorderLayout.SOUTH)
 
-        // 滚动时实时记录章节内位置（恢复进度期间由 restoringScroll 过滤）
+        // 滚动时记录章节内位置。滚轮滚动时 valueIsAdjusting 为 false，会在停下后再落盘，
+        // 拖动滚动条时则为 true，拖拽过程中只更新内存，避免逐像素写配置造成卡顿
         contentScrollPane.verticalScrollBar.addAdjustmentListener {
             saveReadingProgress(storeScroll = true)
         }
@@ -385,7 +386,10 @@ class BookPeekPanel(
     }
 
     override fun dispose() {
-        // 清理资源
+        // 关闭工具窗口 / 退出 IDE 时把最后一次滚动位置落盘
+        if (currentBookId.isNotEmpty()) {
+            ReadingProgressStore.getInstance().flush()
+        }
     }
 
     /**
@@ -405,16 +409,20 @@ class BookPeekPanel(
             )
         )
 
+        val store = ReadingProgressStore.getInstance()
         // 恢复阶段尚未写入滚动位置时沿用已有记录，避免把"未知"写成 0
-        val existing = ReadingProgressStore.getInstance().progressOf(currentBookId)
+        val existing = store.progressOf(currentBookId)
         val scrollValue = if (restoringScroll) existing?.scrollValue else contentScrollPane.verticalScrollBar.value
-        ReadingProgressStore.getInstance().saveProgress(
+        store.saveProgress(
             currentBookId,
-            ReadingProgressStore.Progress(currentChapterIndex, scrollValue)
+            ReadingProgressStore.Progress(currentChapterIndex, scrollValue),
+            flush = !storeScroll || !contentScrollPane.verticalScrollBar.valueIsAdjusting
         )
 
-        ApplicationManager.getApplication().invokeLater {
-            ApplicationManager.getApplication().saveSettings()
+        if (!storeScroll) {
+            ApplicationManager.getApplication().invokeLater {
+                ApplicationManager.getApplication().saveSettings()
+            }
         }
     }
 

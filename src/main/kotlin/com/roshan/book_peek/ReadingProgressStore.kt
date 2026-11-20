@@ -51,9 +51,12 @@ class ReadingProgressStore : PersistentStateComponent<ReadingProgressStore.State
     }
 
     /**
-     * 写入指定书籍的进度；内容未变化时不触发落盘，避免滚动时频繁写文件
+     * 写入指定书籍的进度。
+     *
+     * flush 为 false 时只更新内存中的状态，等滚动结束（或下次章节切换、关闭 IDE）再统一落盘，
+     * 这样可以避免滚轮逐像素滚动时反复写配置文件造成卡顿。
      */
-    fun saveProgress(bookPath: String, progress: Progress) {
+    fun saveProgress(bookPath: String, progress: Progress, flush: Boolean = true) {
         val current = myState
         if (current.bookPath == bookPath &&
             current.chapterIndex == progress.chapterIndex &&
@@ -62,6 +65,13 @@ class ReadingProgressStore : PersistentStateComponent<ReadingProgressStore.State
             return
         }
         myState = State(bookPath, progress.chapterIndex, progress.scrollValue)
+        if (flush) {
+            ApplicationManager.getApplication().saveSettings()
+        }
+    }
+
+    /** 把内存中的进度立即写入磁盘（滚动结束、关闭 IDE 等时机调用） */
+    fun flush() {
         ApplicationManager.getApplication().saveSettings()
     }
 
