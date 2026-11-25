@@ -2,6 +2,7 @@ package com.roshan.book_peek
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
@@ -68,6 +69,16 @@ class BookPeekPanel(
 
     /** 恢复进度期间忽略滚动事件，避免把恢复结果反向覆盖成旧值 */
     private var restoringScroll = false
+
+    /** 滚动位置落盘的防抖定时器：滚动期间只更新内存，停下后统一写盘一次 */
+    private var scrollFlushTimer: Timer? = null
+
+    /**
+     * 窗口标识：多个 IDEA 窗口在同一进程内运行，每个窗口对应独立 Project。
+     * 用项目名 + basePath 区分，basePath 不同则同名项目也能分开；同名同路径的多实例再靠 locationHash 区分。
+     */
+    private val windowId: String = buildWindowId()
+
     private val pageLabel: JBLabel
     private val prevButton: JButton
     private val nextButton: JButton
@@ -98,6 +109,7 @@ class BookPeekPanel(
     companion object {
         private const val CARD_READER = "reader"
         private const val CARD_CHAPTERS = "chapters"
+        private val LOG = logger<BookPeekPanel>()
     }
 
     init {
@@ -226,6 +238,8 @@ class BookPeekPanel(
         // 滚动时记录章节内位置。滚轮滚动时 valueIsAdjusting 为 false，会在停下后再落盘，
         // 拖动滚动条时则为 true，拖拽过程中只更新内存，避免逐像素写配置造成卡顿
         contentScrollPane.verticalScrollBar.addAdjustmentListener {
+            val bar = contentScrollPane.verticalScrollBar
+            LOG.info("记录滚动条位置[$windowId]: 滚动条高度=${bar.value}, 窗口总高度=${bar.maximum}")
             saveReadingProgress(storeScroll = true)
         }
         
@@ -296,12 +310,20 @@ class BookPeekPanel(
         val lastBookPath = settings.lastBookPath
         val bookId = if (lastBookPath.isBlank()) "" else ReadingProgressStore.pathIdOf(File(lastBookPath))
         val stored = ReadingProgressStore.getInstance().progressOf(bookId)
+        LOG.info("恢复进度: 从存储读取 stored=$stored, bookId=$bookId, 设置里的章节=${settings.lastChapterIndex}")
         // 升级前只记过章节索引时，沿用设置里的章节，滚动位置留空
         val progress = stored ?: settings.lastChapterIndex.takeIf { lastBookPath.isNotBlank() }?.let {
             ReadingProgressStore.Progress(it, null)
         }
         val lastIndex = progress?.chapterIndex ?: 0
         restoringScroll = true
+
+        // 必须在滚动条真正设置完成后才解除屏蔽：updateContent 的恢复动作在 invokeLater 里，
+        // 若这里同步置 false，恢复写入 value 触发的 adjustment 事件会被当成用户滚动保存，覆盖已存进度
+        val finishRestore: () -> Unit = {
+            restoringScroll = false
+            LOG.info("恢复完成[$windowId]: 解除滚动屏蔽, 当前滚动条value=${contentScrollPane.verticalScrollBar.value}")
+        }
 
         if (lastBookPath.isNotBlank()) {
             val file = File(lastBookPath)
@@ -318,7 +340,8 @@ class BookPeekPanel(
                     val savedScroll = progress?.scrollValue
                     updateContent(
                         resetScroll = savedScroll == null,
-                        restoreScrollValue = savedScroll ?: 0
+                        restoreScrollValue = savedScroll ?: 0,
+                        onRestored = finishRestore
                     )
                     // 解析时索引被重置为 0，这里把恢复后的进度写回
                     saveReadingProgress()
@@ -327,23 +350,20 @@ class BookPeekPanel(
                     chapters.clear()
                     lastLoadedBookPath = ""
                     currentBookName = "未加载书籍"
-                    updateContent()
+                    updateContent(onRestored = finishRestore)
                 }
             } else {
                 chapters.clear()
                 lastLoadedBookPath = ""
                 currentBookName = "未加载书籍"
-                updateContent()
+                updateContent(onRestored = finishRestore)
             }
         } else {
             chapters.clear()
             lastLoadedBookPath = ""
             currentBookName = "未加载书籍"
-            updateContent()
+            updateContent(onRestored = finishRestore)
         }
-
-        // 恢复完成后再打开滚动记录，避免恢复过程中的滚动事件覆盖已存位置
-        restoringScroll = false
     }
 
     /**
@@ -385,8 +405,23 @@ class BookPeekPanel(
         repaint()
     }
 
+    /**
+     * 构造当前工具窗口所属 IDEA 窗口的标识。
+     * 无 Project 时退化为基于该面板对象身份的 hash，保证同一进程内不同面板仍可区分。
+     */
+    private fun buildWindowId(): String {
+        val p = project ?: return "no-project@${System.identityHashCode(this).toString(16)}"
+        val name = p.name.ifBlank { "<unnamed>" }
+        val path = p.basePath ?: "<no-base-path>"
+        val hash = p.locationHash
+        return "$name | $path | $hash"
+    }
+
     override fun dispose() {
-        // 关闭工具窗口 / 退出 IDE 时把最后一次滚动位置落盘
+        // 取消未决的防抖任务，关闭工具窗口 / 退出 IDE 时立即落盘兜底
+        LOG.info("dispose[$windowId]: 取消防抖定时器并落盘, currentBookId=$currentBookId, 当前滚动条value=${contentScrollPane.verticalScrollBar.value}")
+        scrollFlushTimer?.stop()
+        scrollFlushTimer = null
         if (currentBookId.isNotEmpty()) {
             ReadingProgressStore.getInstance().flush()
         }
@@ -413,13 +448,27 @@ class BookPeekPanel(
         // 恢复阶段尚未写入滚动位置时沿用已有记录，避免把"未知"写成 0
         val existing = store.progressOf(currentBookId)
         val scrollValue = if (restoringScroll) existing?.scrollValue else contentScrollPane.verticalScrollBar.value
+        LOG.info("saveReadingProgress[$windowId]: storeScroll=$storeScroll, restoringScroll=$restoringScroll, 计算出的scrollValue=$scrollValue, 当前滚动条value=${contentScrollPane.verticalScrollBar.value}")
         store.saveProgress(
             currentBookId,
             ReadingProgressStore.Progress(currentChapterIndex, scrollValue),
-            flush = !storeScroll || !contentScrollPane.verticalScrollBar.valueIsAdjusting
+            // 滚动期间只更新内存，由防抖定时器在停下后统一落盘一次；
+            // 非滚动触发（切章、恢复等）保持立即落盘
+            flush = !storeScroll
         )
 
-        if (!storeScroll) {
+        if (storeScroll) {
+            // 重置防抖计时：连续滚动只会在最后一次滚动结束 500ms 后写盘
+            scrollFlushTimer?.stop()
+            LOG.info("saveReadingProgress[$windowId]: 启动500ms防抖定时器, 将写入scrollValue=$scrollValue")
+            scrollFlushTimer = Timer(500) {
+                LOG.info("防抖定时器触发[$windowId]: 落盘scrollValue=$scrollValue")
+                store.flush()
+            }.apply { isRepeats = false }
+            scrollFlushTimer?.start()
+        } else {
+            scrollFlushTimer?.stop()
+            scrollFlushTimer = null
             ApplicationManager.getApplication().invokeLater {
                 ApplicationManager.getApplication().saveSettings()
             }
@@ -512,7 +561,11 @@ class BookPeekPanel(
      * resetScroll 为 true 时回到章节开头；restoreScrollValue 用于恢复上次阅读的位置，
      * 会在布局完成后按比例还原（文档未完成排版时滚动条的最大值不可靠）。
      */
-    private fun updateContent(resetScroll: Boolean = true, restoreScrollValue: Int = 0) {
+    private fun updateContent(
+        resetScroll: Boolean = true,
+        restoreScrollValue: Int = 0,
+        onRestored: (() -> Unit)? = null
+    ) {
         val settings = ReaderSettings.getInstance().state
         contentArea.font = Font("Microsoft YaHei", Font.PLAIN, settings.fontSize)
         
@@ -524,6 +577,7 @@ class BookPeekPanel(
             prevButton.isEnabled = false
             nextButton.isEnabled = false
             updateTabTitle()
+            onRestored?.invoke()
             return
         }
         
@@ -553,7 +607,13 @@ class BookPeekPanel(
                     else -> (restoredRatio * maxScroll).toInt()
                 }
                 scrollBar.value = value.coerceIn(0, maxScroll)
+                LOG.info("恢复滚动条位置[$windowId]: 恢复到的高度=${scrollBar.value}, 窗口总高度=${scrollBar.maximum}")
+                // 滚动条设置完成后才解除屏蔽，避免恢复写入触发的 adjustment 事件被当成用户滚动保存
+                onRestored?.invoke()
             }
+        }
+        if (resetScroll) {
+            onRestored?.invoke()
         }
         pageLabel.text = "${currentChapterIndex + 1} / ${chapters.size}"
         prevButton.isEnabled = currentChapterIndex > 0
