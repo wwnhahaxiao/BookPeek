@@ -2,7 +2,6 @@ package com.roshan.book_peek
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
-import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.components.RoamingType
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
@@ -22,8 +21,6 @@ import java.io.File
 )
 class ReadingProgressStore : PersistentStateComponent<ReadingProgressStore.State> {
 
-    private val LOG = logger<ReadingProgressStore>()
-
     private var myState = State()
 
     data class State(
@@ -35,13 +32,9 @@ class ReadingProgressStore : PersistentStateComponent<ReadingProgressStore.State
         var scrollValue: Int? = null
     )
 
-    override fun getState(): State {
-        LOG.info("getState: 返回内存状态 book=$myState")
-        return myState
-    }
+    override fun getState(): State = myState
 
     override fun loadState(state: State) {
-        LOG.info("loadState: 从磁盘加载 book=$state")
         myState = state
     }
 
@@ -50,13 +43,11 @@ class ReadingProgressStore : PersistentStateComponent<ReadingProgressStore.State
      */
     fun progressOf(bookPath: String): Progress? {
         val current = myState
-        val result = if (current.bookPath.isNotEmpty() && current.bookPath == bookPath) {
+        return if (current.bookPath.isNotEmpty() && current.bookPath == bookPath) {
             Progress(current.chapterIndex, current.scrollValue)
         } else {
             null
         }
-        LOG.info("progressOf[请求=$bookPath]: 内存状态=$current, 返回=$result")
-        return result
     }
 
     /**
@@ -71,20 +62,25 @@ class ReadingProgressStore : PersistentStateComponent<ReadingProgressStore.State
             current.chapterIndex == progress.chapterIndex &&
             current.scrollValue == progress.scrollValue
         ) {
-            LOG.info("saveProgress: 去重跳过(值未变) progress=$progress, flush=$flush")
             return
         }
         myState = State(bookPath, progress.chapterIndex, progress.scrollValue)
-        LOG.info("saveProgress: 更新内存 $current -> $myState, flush=$flush")
         if (flush) {
-            LOG.info("saveProgress: 调用 saveSettings() 落盘")
             ApplicationManager.getApplication().saveSettings()
         }
     }
 
+    /**
+     * 只更新内存中的进度，不触发落盘。
+     * 用于 dispose 等处于 write action 中的场景：此时调用 saveSettings() 会在写锁里起 modal progress，
+     * 被 IDE 拒绝。PersistentStateComponent 框架在关闭时会自行读取 getState() 持久化内存状态。
+     */
+    fun saveProgressInMemory(bookPath: String, progress: Progress) {
+        myState = State(bookPath, progress.chapterIndex, progress.scrollValue)
+    }
+
     /** 把内存中的进度立即写入磁盘（滚动结束、关闭 IDE 等时机调用） */
     fun flush() {
-        LOG.info("flush: 调用 saveSettings() 落盘, 当前内存状态=$myState")
         ApplicationManager.getApplication().saveSettings()
     }
 
